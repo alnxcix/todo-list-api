@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import tasksRouter from "./routes/tasks";
+import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +15,9 @@ app.get("/", (req: Request, res: Response) => {
 
 // ** Tasks API **
 app.use("/tasks", tasksRouter);
+
+// ** Error Handling Middleware **
+app.use(errorHandler);
 
 // ** Start server **
 app.listen(PORT, () => {
