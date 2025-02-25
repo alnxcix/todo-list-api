@@ -75,4 +75,28 @@ router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+// ** DELETE route to remove a task **
+router.delete("/:id", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const taskIndex = tasks.findIndex((task) => task.id === id);
+
+    if (taskIndex === -1) {
+      // ** Throw an error if task is not found **
+      const error = new Error("Task not found");
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    const deletedTask = tasks.splice(taskIndex, 1)[0];
+
+    res.status(200).json({
+      message: "Task successfully deleted",
+      deletedTask,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
