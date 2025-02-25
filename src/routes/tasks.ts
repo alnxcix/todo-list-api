@@ -43,7 +43,10 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
 
     tasks.push(newTask);
 
-    res.status(201).json(newTask);
+    res.status(201).json({
+      message: "Task succesfully added",
+      newTask,
+    });
   } catch (error) {
     next(error); // Pass error to middleware
   }
@@ -59,7 +62,9 @@ router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
 
     if (!task) {
       // ** Throw an error if task is not found **
-      res.status(404).json({ message: "Task not found" });
+      const error = new Error("Task not found");
+      (error as any).statusCode = 404;
+      throw error;
     } else {
       // ** Update fields **
       if (title !== undefined) task.title = title;
@@ -68,7 +73,10 @@ router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
       if (position !== undefined) task.position = position;
       task.updatedAt = new Date();
 
-      res.json(task);
+      res.status(200).json({
+        message: "Task succesfully updated",
+        updatedTask: task,
+      });
     }
   } catch (error) {
     next(error);
