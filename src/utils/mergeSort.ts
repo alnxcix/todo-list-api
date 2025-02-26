@@ -16,7 +16,7 @@ export const mergeSort = (
 };
 
 // ** Merge function for Merge Sort **
-export const merge = (
+const merge = (
   left: Task[],
   right: Task[],
   key: keyof Task,
