@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { tasks } from "../data/tasks";
+import { taskMap, taskOrder as taskOrderMutable } from "../data/tasks";
 import { Task } from "../models/Task";
 import { v4 as uuidv4 } from "uuid";
 
@@ -8,13 +8,16 @@ const router = Router();
 // ** GET /tasks — List All Tasks **
 router.get("/", (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!tasks) {
-      const error = new Error("Tasks not found");
+    if (!taskOrderMutable) {
+      const error = new Error("No tasks found");
       (error as any).statusCode = 404;
       throw error;
     }
 
-    res.status(200).json(tasks);
+    // ** Retrieve tasks in order **
+    const orderedTasks: Task[] = taskOrderMutable.map((id) => taskMap.get(id)!);
+
+    res.status(200).json({ tasks: orderedTasks });
   } catch (error) {
     next(error); // Pass to error handler
   }
@@ -36,15 +39,16 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
       title,
       description: description || "",
       isCompleted: false,
-      position: tasks.length + 1, // Append to end
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    tasks.push(newTask);
+    // ** Store task in Map and update order list **
+    taskMap.set(newTask.id, newTask);
+    taskOrderMutable.push(newTask.id);
 
     res.status(201).json({
-      message: "Task succesfully added",
+      message: "Task successfully added",
       newTask,
     });
   } catch (error) {
@@ -52,101 +56,106 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// ** PUT route to update a task **
+// ** PUT /tasks/:id — Update a Task **
 router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { title, description, isCompleted, position } = req.body;
+    const { title, description, isCompleted } = req.body;
 
-    const task = tasks.find((task) => task.id === id);
-
-    if (!task) {
-      // ** Throw an error if task is not found **
-      const error = new Error("Task not found");
-      (error as any).statusCode = 404;
-      throw error;
-    } else {
-      // ** Update fields **
-      if (title !== undefined) task.title = title;
-      if (description !== undefined) task.description = description;
-      if (isCompleted !== undefined) task.isCompleted = isCompleted;
-      if (position !== undefined) task.position = position;
-      task.updatedAt = new Date();
-
-      res.status(200).json({
-        message: "Task succesfully updated",
-        updatedTask: task,
-      });
-    }
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ** DELETE route to remove a task **
-router.delete("/:id", (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    const taskIndex = tasks.findIndex((task) => task.id === id);
-
-    if (taskIndex === -1) {
-      // ** Throw an error if task is not found **
+    // ** Error handling: Check if the task exists **
+    if (!taskMap.has(id)) {
       const error = new Error("Task not found");
       (error as any).statusCode = 404;
       throw error;
     }
 
-    const deletedTask = tasks.splice(taskIndex, 1)[0];
+    const task = taskMap.get(id)!;
+
+    // ** Update fields **
+    if (title !== undefined) task.title = title;
+    if (description !== undefined) task.description = description;
+    if (isCompleted !== undefined) task.isCompleted = isCompleted;
+    task.updatedAt = new Date();
 
     res.status(200).json({
-      message: "Task successfully deleted",
-      deletedTask,
+      message: "Task successfully updated",
+      updatedTask: task,
     });
   } catch (error) {
     next(error);
   }
 });
 
-/**
- * POST /tasks/reorder
- * Body: { taskId: string, newPosition: number }
- * This route is for reordering the tasks
- */
+// ** DELETE /tasks/:id — Remove a Task **
+router.delete("/:id", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    // ** Error handling: Check if the task exists **
+    if (!taskMap.has(id)) {
+      const error = new Error("Task not found");
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    // ** Retrieve the task before deletion **
+    const deletedTask = taskMap.get(id);
+
+    // ** Remove from `taskMap` and update `taskOrderMutable` **
+    taskMap.delete(id);
+    taskOrderMutable.splice(taskOrderMutable.indexOf(id), 1);
+
+    res.status(200).json({
+      message: "Task successfully deleted",
+      deletedTask, // Return the deleted task
+    });
+  } catch (error) {
+    next(error); // Pass error to middleware
+  }
+});
+
+// ** POST /tasks/reorder — Reorder tasks on position update **
 router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
   try {
     const { taskId, newPosition } = req.body;
 
-    if (newPosition < 1 || newPosition > tasks.length) {
+    // ** Find the current index of the task **
+    const currentIndex = taskOrderMutable.indexOf(taskId);
+
+    // ** Error handling: Check if the task exists **
+    if (!taskMap.has(taskId) || currentIndex === -1) {
+      const error = new Error("Task not found");
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    // ** Error handling: Check if position is valid **
+    if (newPosition < 1 || newPosition > taskOrderMutable.length) {
       const error = new Error("Invalid new position");
       (error as any).statusCode = 400;
       throw error;
     }
 
-    const taskIndex = tasks.findIndex((task) => task.id === taskId);
-    if (taskIndex === -1) {
-      const error = new Error("Task not found");
-      (error as any).statusCode = 400;
-      throw error;
-    }
+    // ** Remove the task ID from its current position **
+    taskOrderMutable.splice(currentIndex, 1);
 
-    // Remove the task from its current position
-    const [task] = tasks.splice(taskIndex, 1);
+    // ** Insert the task ID at the new position **
+    taskOrderMutable.splice(newPosition - 1, 0, taskId);
 
-    // Insert it into the new position (adjusting for 1-based index)
-    tasks.splice(newPosition - 1, 0, task);
-
-    // Reassign positions starting at 1
-    tasks.forEach((t, index) => {
-      t.position = index + 1;
-      t.updatedAt = new Date();
+    // ** Update `updatedAt` in the `taskMap` **
+    taskOrderMutable.forEach((id) => {
+      const task = taskMap.get(id);
+      if (task) {
+        task.updatedAt = new Date();
+      }
     });
 
     res.status(200).json({
       message: "Task reordered successfully",
-      tasks,
+      taskOrder: taskOrderMutable, // Updated order of task IDs
     });
   } catch (error) {
-    next(error);
+    next(error); // Pass to error handler
   }
 });
 
