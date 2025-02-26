@@ -84,6 +84,9 @@ router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
     if (isCompleted !== undefined) task.isCompleted = isCompleted;
     task.updatedAt = new Date();
 
+    // ** Ensure taskMap reflects the update **
+    taskMap.set(id, task);
+
     res.status(200).json({
       message: "Task successfully updated",
       updatedTask: task,
