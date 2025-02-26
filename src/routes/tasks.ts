@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { taskMap, taskOrder } from "../data/tasks";
+import { taskMap, taskOrder, updateTaskOrder } from "../data/tasks";
 import { Task } from "../models/Task";
 import { v4 as uuidv4 } from "uuid";
+import { mergeSort } from "../utils/mergeSort";
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
       throw error;
     }
 
-    const { isCompleted } = req.query;
+    const { isCompleted, sortBy = "createdAt", order = "asc" } = req.query;
 
     // ** Convert query param to boolean if provided **
     const filterCompleted =
@@ -32,6 +33,34 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
         (task) => task.isCompleted === filterCompleted
       );
     }
+
+    const validSortKeys: (keyof Task)[] = [
+      "title",
+      "isCompleted",
+      "createdAt",
+      "updatedAt",
+    ];
+
+    // ** Error handling: Validate sortBy param **
+    if (!validSortKeys.includes(sortBy as keyof Task)) {
+      const error = new Error("Invalid sortBy parameter");
+      (error as any).statusCode = 400;
+      throw error;
+    }
+
+    // ** Error handling: Validate order param **
+    if (order !== "asc" && order !== "desc") {
+      const error = new Error("Invalid order parameter");
+      (error as any).statusCode = 400;
+      throw error;
+    }
+
+    // ** Apply Merge Sort **
+    orderedTasks = mergeSort(
+      orderedTasks,
+      sortBy as keyof Task,
+      order as "asc" | "desc"
+    );
 
     res.status(200).json({ tasks: orderedTasks });
   } catch (error) {
@@ -163,10 +192,13 @@ router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
     }
 
     // ** Remove the task ID from its current position **
-    taskOrder.splice(currentIndex, 1);
-
     // ** Insert the task ID at the new position **
-    taskOrder.splice(newPosition, 0, taskId);
+
+    updateTaskOrder([
+      ...taskOrder.slice(0, newPosition),
+      taskId,
+      ...taskOrder.slice(newPosition),
+    ]);
 
     // ** Update `updatedAt` in the `taskMap` **
     taskOrder.forEach((id) => {
