@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { taskMap, taskOrder as taskOrderMutable } from "../data/tasks";
+import { taskMap, taskOrder } from "../data/tasks";
 import { Task } from "../models/Task";
 import { v4 as uuidv4 } from "uuid";
 
@@ -8,17 +8,30 @@ const router = Router();
 // ** GET /tasks — List All Tasks **
 router.get("/", (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!taskOrderMutable) {
+    if (!taskOrder) {
       const error = new Error("No tasks found");
       (error as any).statusCode = 404;
       throw error;
     }
 
+    const { isCompleted } = req.query;
+
+    // ** Convert query param to boolean if provided **
+    const filterCompleted =
+      isCompleted !== undefined ? isCompleted === "true" : null;
+
     // ** Retrieve tasks in order **
-    const orderedTasks: Task[] = taskOrderMutable.map((id, index) => ({
+    let orderedTasks: Task[] = taskOrder.map((id, index) => ({
       ...taskMap.get(id)!,
       position: index,
     }));
+
+    // ** Apply filtering if `isCompleted` is specified **
+    if (filterCompleted !== null) {
+      orderedTasks = orderedTasks.filter(
+        (task) => task.isCompleted === filterCompleted
+      );
+    }
 
     res.status(200).json({ tasks: orderedTasks });
   } catch (error) {
@@ -48,11 +61,11 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
 
     // ** Store task in Map and update order list **
     taskMap.set(newTask.id, newTask);
-    taskOrderMutable.push(newTask.id);
+    taskOrder.push(newTask.id);
 
     res.status(201).json({
       message: "Task successfully added",
-      newTask: { ...newTask, position: taskOrderMutable.length - 1 },
+      newTask: { ...newTask, position: taskOrder.length - 1 },
     });
   } catch (error) {
     next(error); // Pass error to middleware
@@ -75,7 +88,7 @@ router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
     // ** Retrieve the task to update **
     const task = {
       ...taskMap.get(id)!,
-      position: taskOrderMutable.indexOf(id),
+      position: taskOrder.indexOf(id),
     };
 
     // ** Update fields **
@@ -111,12 +124,12 @@ router.delete("/:id", (req: Request, res: Response, next: NextFunction) => {
     // ** Retrieve the task before deletion **
     const deletedTask = {
       ...taskMap.get(id),
-      position: taskOrderMutable.indexOf(id),
+      position: taskOrder.indexOf(id),
     };
 
-    // ** Remove from `taskMap` and update `taskOrderMutable` **
+    // ** Remove from `taskMap` and update `taskOrder` **
     taskMap.delete(id);
-    taskOrderMutable.splice(taskOrderMutable.indexOf(id), 1);
+    taskOrder.splice(taskOrder.indexOf(id), 1);
 
     res.status(200).json({
       message: "Task successfully deleted",
@@ -133,7 +146,7 @@ router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
     const { taskId, newPosition } = req.body;
 
     // ** Find the current index of the task **
-    const currentIndex = taskOrderMutable.indexOf(taskId);
+    const currentIndex = taskOrder.indexOf(taskId);
 
     // ** Error handling: Check if the task exists **
     if (!taskMap.has(taskId) || currentIndex === -1) {
@@ -143,20 +156,20 @@ router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
     }
 
     // ** Error handling: Check if position is valid **
-    if (newPosition < 0 || newPosition >= taskOrderMutable.length) {
+    if (newPosition < 0 || newPosition >= taskOrder.length) {
       const error = new Error("Invalid new position");
       (error as any).statusCode = 400;
       throw error;
     }
 
     // ** Remove the task ID from its current position **
-    taskOrderMutable.splice(currentIndex, 1);
+    taskOrder.splice(currentIndex, 1);
 
     // ** Insert the task ID at the new position **
-    taskOrderMutable.splice(newPosition, 0, taskId);
+    taskOrder.splice(newPosition, 0, taskId);
 
     // ** Update `updatedAt` in the `taskMap` **
-    taskOrderMutable.forEach((id) => {
+    taskOrder.forEach((id) => {
       const task = taskMap.get(id);
       if (task) {
         task.updatedAt = new Date();
@@ -165,7 +178,7 @@ router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
 
     res.status(200).json({
       message: "Task reordered successfully",
-      taskOrder: taskOrderMutable, // Updated order of task IDs
+      taskOrder: taskOrder, // Updated order of task IDs
     });
   } catch (error) {
     next(error); // Pass to error handler
