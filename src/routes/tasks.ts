@@ -15,7 +15,10 @@ router.get("/", (req: Request, res: Response, next: NextFunction) => {
     }
 
     // ** Retrieve tasks in order **
-    const orderedTasks: Task[] = taskOrderMutable.map((id) => taskMap.get(id)!);
+    const orderedTasks: Task[] = taskOrderMutable.map((id, index) => ({
+      ...taskMap.get(id)!,
+      position: index,
+    }));
 
     res.status(200).json({ tasks: orderedTasks });
   } catch (error) {
@@ -49,7 +52,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
 
     res.status(201).json({
       message: "Task successfully added",
-      newTask,
+      newTask: { ...newTask, position: taskOrderMutable.length - 1 },
     });
   } catch (error) {
     next(error); // Pass error to middleware
@@ -69,7 +72,11 @@ router.put("/:id", (req: Request, res: Response, next: NextFunction) => {
       throw error;
     }
 
-    const task = taskMap.get(id)!;
+    // ** Retrieve the task to update **
+    const task = {
+      ...taskMap.get(id)!,
+      position: taskOrderMutable.indexOf(id),
+    };
 
     // ** Update fields **
     if (title !== undefined) task.title = title;
@@ -99,7 +106,10 @@ router.delete("/:id", (req: Request, res: Response, next: NextFunction) => {
     }
 
     // ** Retrieve the task before deletion **
-    const deletedTask = taskMap.get(id);
+    const deletedTask = {
+      ...taskMap.get(id),
+      position: taskOrderMutable.indexOf(id),
+    };
 
     // ** Remove from `taskMap` and update `taskOrderMutable` **
     taskMap.delete(id);
@@ -130,7 +140,7 @@ router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
     }
 
     // ** Error handling: Check if position is valid **
-    if (newPosition < 1 || newPosition > taskOrderMutable.length) {
+    if (newPosition < 0 || newPosition >= taskOrderMutable.length) {
       const error = new Error("Invalid new position");
       (error as any).statusCode = 400;
       throw error;
@@ -140,7 +150,7 @@ router.post("/reorder", (req: Request, res: Response, next: NextFunction) => {
     taskOrderMutable.splice(currentIndex, 1);
 
     // ** Insert the task ID at the new position **
-    taskOrderMutable.splice(newPosition - 1, 0, taskId);
+    taskOrderMutable.splice(newPosition, 0, taskId);
 
     // ** Update `updatedAt` in the `taskMap` **
     taskOrderMutable.forEach((id) => {
