@@ -9,6 +9,7 @@
     "build": "tsc",
     "test": "jest --runInBand --forceExit",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --runInBand --forceExit --coverage",
     "lint": "eslint --fix .",
     "format": "prettier --write ."
   },
