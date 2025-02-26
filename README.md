@@ -66,6 +66,22 @@ npm run lint   # Check for linting errors
 npm run format # Format code using Prettier
 ```
 
+## 📦 Building for Production
+
+Compile the TypeScript code into JavaScript:
+
+```sh
+npm run build
+```
+
+The output will be placed in the `/dist` folder.
+
+Run the compiled code:
+
+```sh
+npm start
+```
+
 ## 📂 Project Structure
 
 ```
